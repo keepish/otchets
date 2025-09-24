@@ -1,96 +1,216 @@
 using System;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace Task1
+namespace Task2
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
-            Console.WriteLine("=== Временная избыточность - Повтор запросов ===");
+            Console.WriteLine("=== Программная избыточность - Анализ температуры ===");
             
-            string url = "http://arcotel.ru";
-            Console.WriteLine($"URL: {url}");
-            Console.WriteLine($"Метод: GET");
-            Console.WriteLine(new string('-', 40));
-            
-            // Простые настройки
-            int maxAttempts = 3;
-            int delayMs = 1000;
-            
-            // Создаем HttpClient один раз
-            using (HttpClient client = new HttpClient())
+            while (true)
             {
-                // Настраиваем таймаут
-                client.Timeout = TimeSpan.FromSeconds(10);
+                Console.WriteLine("\nВыберите вариант:");
+                Console.WriteLine("1. Использовать сгенерированные данные");
+                Console.WriteLine("2. Ввести данные вручную");
+                Console.WriteLine("3. Выйти");
                 
-                // Переменная для результата
-                string result = null;
-                bool success = false;
-                int attempt;
+                var choice = Console.ReadLine();
                 
-                // Простой цикл повторов
-                for (attempt = 1; attempt <= maxAttempts; attempt++)
+                switch (choice)
                 {
-                    Console.WriteLine($"Попытка {attempt} из {maxAttempts}...");
-                    
-                    try
-                    {
-                        // Выполняем GET запрос
-                        HttpResponseMessage response = await client.GetAsync(url);
-                        
-                        if (response.IsSuccessStatusCode)
-                        {
-                            // Читаем результат
-                            result = await response.Content.ReadAsStringAsync();
-                            success = true;
-                            Console.WriteLine($"УСПЕХ! Статус код: {(int)response.StatusCode}");
-                            break; // Выходим из цикла при успехе
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Ошибка HTTP: {(int)response.StatusCode}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Ошибка: {ex.Message}");
-                    }
-                    
-                    // Если не последняя попытка - ждем
-                    if (attempt < maxAttempts)
-                    {
-                        Console.WriteLine($"Ждем {delayMs} мс...");
-                        Thread.Sleep(delayMs);
-                    }
+                    case "1":
+                        AnalyzeGeneratedData();
+                        break;
+                    case "2":
+                        AnalyzeManualData();
+                        break;
+                    case "3":
+                        return;
+                    default:
+                        Console.WriteLine("Неверный выбор");
+                        break;
                 }
-                
-                // Выводим итоговый результат
-                Console.WriteLine(new string('-', 40));
-                
-                if (success)
+            }
+        }
+
+        static void AnalyzeGeneratedData()
+        {
+            // 5.2.1 Генерация наборов данных
+            Console.WriteLine("\n--- Анализ сгенерированных данных ---");
+            
+            var smoothData = GenerateSmoothTemperatureData();
+            var anomalyData = GenerateTemperatureDataWithAnomalies();
+
+            Console.WriteLine("Плавные данные: " + string.Join(", ", smoothData.Select(t => t.ToString("F1"))));
+            Console.WriteLine("Данные с аномалиями: " + string.Join(", ", anomalyData.Select(t => t.ToString("F1"))));
+
+            // Анализ данных
+            AnalyzeTemperatureData(smoothData, "Плавные данные");
+            AnalyzeTemperatureData(anomalyData, "Данные с аномалиями");
+        }
+
+        static void AnalyzeManualData()
+        {
+            Console.WriteLine("\n--- Ввод данных вручную ---");
+            Console.WriteLine("Введите значения температуры через запятую или пробел:");
+            string input = Console.ReadLine();
+            
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Console.WriteLine("Данные не введены!");
+                return;
+            }
+
+            var data = ParseInputData(input);
+            if (data.Length == 0)
+            {
+                Console.WriteLine("Не удалось распознать данные!");
+                return;
+            }
+
+            Console.WriteLine($"Введенные данные: {string.Join(", ", data.Select(t => t.ToString("F1")))}");
+            AnalyzeTemperatureData(data, "Введенные данные");
+        }
+
+        static double[] ParseInputData(string input)
+        {
+            var separators = new char[] { ',', ' ', ';', '\t' };
+            var numbers = new List<double>();
+            
+            foreach (var part in input.Split(separators, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (double.TryParse(part.Trim(), out double value))
                 {
-                    Console.WriteLine($"Успешно выполнено за {attempt} попыток");
-                    Console.WriteLine($"Размер ответа: {result.Length} символов");
-                    
-                    if (result.Length > 0)
-                    {
-                        Console.WriteLine("Начало ответа:");
-                        int previewLength = Math.Min(200, result.Length);
-                        Console.WriteLine(result.Substring(0, previewLength));
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"Все {maxAttempts} попыток завершились ошибкой");
+                    numbers.Add(value);
                 }
             }
             
-            Console.WriteLine("\nНажмите Enter для выхода...");
-            Console.ReadLine();
+            return numbers.ToArray();
+        }
+
+        static double[] GenerateSmoothTemperatureData()
+        {
+            var random = new Random();
+            double baseTemp = 20.0;
+            var data = new List<double>();
+
+            for (int i = 0; i < 24; i++)
+            {
+                // Плавные изменения ±2°C
+                double variation = (random.NextDouble() - 0.5) * 4;
+                data.Add(baseTemp + variation);
+                baseTemp += (random.NextDouble() - 0.5) * 1; // Медленный дрейф
+            }
+
+            return data.ToArray();
+        }
+
+        static double[] GenerateTemperatureDataWithAnomalies()
+        {
+            var random = new Random();
+            double baseTemp = 20.0;
+            var data = new List<double>();
+
+            for (int i = 0; i < 24; i++)
+            {
+                double temp = baseTemp + (random.NextDouble() - 0.5) * 4;
+                
+                // Добавляем аномалии с вероятностью 20%
+                if (random.NextDouble() < 0.2)
+                {
+                    // Резкий перепад ±10-30°C
+                    temp += (random.NextDouble() - 0.5) * 40;
+                    Console.WriteLine($"Добавлена аномалия: {temp:F1}°C");
+                }
+
+                data.Add(temp);
+                baseTemp += (random.NextDouble() - 0.5) * 1;
+            }
+
+            return data.ToArray();
+        }
+
+        static void AnalyzeTemperatureData(double[] data, string datasetName)
+        {
+            if (data.Length == 0)
+            {
+                Console.WriteLine("Нет данных для анализа!");
+                return;
+            }
+
+            // 5.2.2 Вычисление средних значений
+            double averageAll = data.Average();
+            double averageFiltered = CalculateFilteredAverage(data);
+            double difference = Math.Abs(averageAll - averageFiltered);
+
+            Console.WriteLine($"\n--- Анализ {datasetName} ---");
+            Console.WriteLine($"Количество измерений: {data.Length}");
+            Console.WriteLine($"Среднее значение (все данные): {averageAll:F2}°C");
+            Console.WriteLine($"Среднее значение (без выбросов): {averageFiltered:F2}°C");
+            Console.WriteLine($"Разница между средними: {difference:F2}°C");
+
+            // 5.2.3 Сравнение и вывод сообщений
+            if (difference > 2.0) // Порог для обнаружения аномалий
+            {
+                int outlierCount = data.Length - data.Count(x => 
+                {
+                    var sorted = data.OrderBy(d => d).ToArray();
+                    double Q1 = sorted[data.Length / 4];
+                    double Q3 = sorted[data.Length * 3 / 4];
+                    double IQR = Q3 - Q1;
+                    return x >= Q1 - 1.5 * IQR && x <= Q3 + 1.5 * IQR;
+                });
+
+                Console.WriteLine("⚠️  ОБНАРУЖЕНЫ АНОМАЛИИ: Значения значительно отличаются!");
+                Console.WriteLine($"   Количество выбросов: {outlierCount}");
+                Console.WriteLine($"   Рекомендуется использовать фильтрованное среднее: {averageFiltered:F2}°C");
+            }
+            else
+            {
+                Console.WriteLine("✅ Данные в норме, аномалий не обнаружено");
+                Console.WriteLine($"   Можно использовать общее среднее: {averageAll:F2}°C");
+            }
+
+            // Дополнительная статистика
+            Console.WriteLine($"\nДополнительная статистика:");
+            Console.WriteLine($"   Минимальная температура: {data.Min():F1}°C");
+            Console.WriteLine($"   Максимальная температура: {data.Max():F1}°C");
+            Console.WriteLine($"   Медиана: {CalculateMedian(data):F1}°C");
+            Console.WriteLine($"   Стандартное отклонение: {CalculateStandardDeviation(data):F2}°C");
+        }
+
+        static double CalculateFilteredAverage(double[] data)
+        {
+            if (data.Length == 0) return 0;
+
+            // Используем межквартильный размах для фильтрации выбросов
+            var sorted = data.OrderBy(x => x).ToArray();
+            double Q1 = sorted[data.Length / 4];
+            double Q3 = sorted[data.Length * 3 / 4];
+            double IQR = Q3 - Q1;
+            double lowerBound = Q1 - 1.5 * IQR;
+            double upperBound = Q3 + 1.5 * IQR;
+
+            var filtered = data.Where(x => x >= lowerBound && x <= upperBound).ToArray();
+            return filtered.Length > 0 ? filtered.Average() : data.Average();
+        }
+
+        static double CalculateMedian(double[] data)
+        {
+            var sorted = data.OrderBy(x => x).ToArray();
+            int mid = sorted.Length / 2;
+            return sorted.Length % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+        }
+
+        static double CalculateStandardDeviation(double[] data)
+        {
+            if (data.Length == 0) return 0;
+            double average = data.Average();
+            double sumOfSquares = data.Sum(x => Math.Pow(x - average, 2));
+            return Math.Sqrt(sumOfSquares / data.Length);
         }
     }
 }
-
