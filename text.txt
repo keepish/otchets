@@ -1,23 +1,10 @@
-улучши интерфейс приложения для ввода и добавления промокодов 
-<Window x:Class="WpfApp.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:WpfApp"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800" WindowStartupLocation="CenterScreen">
-    <StackPanel>
-        <Label Content="Активация промокодов" HorizontalAlignment="Center" FontSize="36" Margin="0,50"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,50,0,10">
-            <Label Content="Промокод:"/>
-            <TextBox x:Name="PromocodeTextBox" Width="100" MaxLength="8"/>
-        </StackPanel>
-        <Button x:Name="ActivationPromocodeButton" Content="Активировать промокод" HorizontalAlignment="Center" Height="20" Width="170" Click="ActivationPromocodeButton_Click"/>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,100,0,0">
-            <Label Content="Количество активных промкодов:"/>
-            <Label x:Name="PromocodeCountLabel" Content="data"/>
-        </StackPanel>
+5.1 Реализовать временную избыточность для выполнения запроса к серверу в условиях ненадёжного сетевого соединения:
+При отправке запросов к серверу при неудачном ответе повторить запрос еще несколько раз.
+5.2 Реализовать программную избыточность для анализа аномалий в измерении температуры (см. п. 9);
+5.2.1 Сформировать два набора данных о температуре воздуха: один набор должен быть плавно усреднен без резких перепадов температуры, второй набор – содержит данные значительно отличающиеся от средних значений: резкие перепады, аномально высокие или низкие значения
+5.2.2 Вычислить среднее значение температуры с учетом и без учета выбросов
+5.2.3 Сравнить значения и вывести сообщение о наличии аномалий в данных, если значения значительно отличаются.
+5.3 Реализовать информационную избыточность методом зеркалирования данных и проверки чек-сумм; 
+5.3.1 Разработать приложение-хранилище файлов. Пользователь выбирает в приложении каталог и каталог – зеркало, после чего может загружать в приложение файлы. При загрузке файла в оба указанных каталога сохраняется выбранный файл и там же создаются файлы ИмяФайла.checksum, которые содержат чек-сумму файла (чек-сумму можно получить с использованием одного из стандартных алгоритмов хэширования).
+5.3.2 Реализовать возможность выгружать файлы из приложения, при этом перед выгрузкой сверять чек-сумму файла с учетом файла .checksum, и при несоответствии основного файла и соответствии зеркалированного возвращать корректный файл.
 
-    </StackPanel>
-</Window>
