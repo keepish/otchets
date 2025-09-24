@@ -1,33 +1,53 @@
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
 
-namespace Task2
+namespace Task3
 {
     class Program
     {
-        static void Main(string[] args)
+        private static string sourceDirectory = "";
+        private static string mirrorDirectory = "";
+
+        static async Task Main(string[] args)
         {
-            Console.WriteLine("=== Программная избыточность - Анализ температуры ===");
-            
+            Console.WriteLine("=== Информационная избыточность - Зеркалирование файлов ===");
+
+            // Инициализация каталогов
+            InitializeDirectories();
+
             while (true)
             {
-                Console.WriteLine("\nВыберите вариант:");
-                Console.WriteLine("1. Использовать сгенерированные данные");
-                Console.WriteLine("2. Ввести данные вручную");
-                Console.WriteLine("3. Выйти");
+                Console.WriteLine("\nВыберите действие:");
+                Console.WriteLine("1. Загрузить файл");
+                Console.WriteLine("2. Выгрузить файл");
+                Console.WriteLine("3. Проверить целостность файлов");
+                Console.WriteLine("4. Показать список файлов");
+                Console.WriteLine("5. Изменить каталоги");
+                Console.WriteLine("6. Выйти");
                 
                 var choice = Console.ReadLine();
                 
                 switch (choice)
                 {
                     case "1":
-                        AnalyzeGeneratedData();
+                        await UploadFile();
                         break;
                     case "2":
-                        AnalyzeManualData();
+                        await DownloadFile();
                         break;
                     case "3":
+                        await VerifyFilesIntegrity();
+                        break;
+                    case "4":
+                        ShowFileList();
+                        break;
+                    case "5":
+                        InitializeDirectories(true);
+                        break;
+                    case "6":
                         return;
                     default:
                         Console.WriteLine("Неверный выбор");
@@ -36,181 +56,259 @@ namespace Task2
             }
         }
 
-        static void AnalyzeGeneratedData()
+        static void InitializeDirectories(bool forceReenter = false)
         {
-            // 5.2.1 Генерация наборов данных
-            Console.WriteLine("\n--- Анализ сгенерированных данных ---");
-            
-            var smoothData = GenerateSmoothTemperatureData();
-            var anomalyData = GenerateTemperatureDataWithAnomalies();
+            if (!forceReenter && !string.IsNullOrEmpty(sourceDirectory) && Directory.Exists(sourceDirectory))
+                return;
 
-            Console.WriteLine("Плавные данные: " + string.Join(", ", smoothData.Select(t => t.ToString("F1"))));
-            Console.WriteLine("Данные с аномалиями: " + string.Join(", ", anomalyData.Select(t => t.ToString("F1"))));
+            if (forceReenter || string.IsNullOrEmpty(sourceDirectory))
+            {
+                Console.Write("Введите путь к основному каталогу: ");
+                sourceDirectory = Console.ReadLine();
+            }
 
-            // Анализ данных
-            AnalyzeTemperatureData(smoothData, "Плавные данные");
-            AnalyzeTemperatureData(anomalyData, "Данные с аномалиями");
+            if (forceReenter || string.IsNullOrEmpty(mirrorDirectory))
+            {
+                Console.Write("Введите путь к зеркальному каталогу: ");
+                mirrorDirectory = Console.ReadLine();
+            }
+
+            // Создаем каталоги если не существуют
+            try
+            {
+                Directory.CreateDirectory(sourceDirectory);
+                Directory.CreateDirectory(mirrorDirectory);
+                Console.WriteLine($"✅ Каталоги инициализированы:");
+                Console.WriteLine($"   Основной: {sourceDirectory}");
+                Console.WriteLine($"   Зеркальный: {mirrorDirectory}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка создания каталогов: {ex.Message}");
+                sourceDirectory = mirrorDirectory = "";
+                InitializeDirectories(true);
+            }
         }
 
-        static void AnalyzeManualData()
+        static async Task UploadFile()
         {
-            Console.WriteLine("\n--- Ввод данных вручную ---");
-            Console.WriteLine("Введите значения температуры через запятую или пробел:");
-            string input = Console.ReadLine();
-            
-            if (string.IsNullOrWhiteSpace(input))
+            InitializeDirectories();
+
+            Console.Write("Введите путь к файлу для загрузки: ");
+            string filePath = Console.ReadLine();
+
+            if (!File.Exists(filePath))
             {
-                Console.WriteLine("Данные не введены!");
+                Console.WriteLine("❌ Файл не существует!");
                 return;
             }
 
-            var data = ParseInputData(input);
-            if (data.Length == 0)
+            string fileName = Path.GetFileName(filePath);
+            string sourceFilePath = Path.Combine(sourceDirectory, fileName);
+            string mirrorFilePath = Path.Combine(mirrorDirectory, fileName);
+
+            try
             {
-                Console.WriteLine("Не удалось распознать данные!");
+                // Копируем файл в оба каталога
+                File.Copy(filePath, sourceFilePath, true);
+                File.Copy(filePath, mirrorFilePath, true);
+
+                // Создаем чек-суммы
+                string sourceChecksum = await CalculateChecksum(sourceFilePath);
+                string mirrorChecksum = await CalculateChecksum(mirrorFilePath);
+
+                // Сохраняем чек-суммы
+                await File.WriteAllTextAsync(sourceFilePath + ".checksum", sourceChecksum);
+                await File.WriteAllTextAsync(mirrorFilePath + ".checksum", mirrorChecksum);
+
+                Console.WriteLine($"✅ Файл '{fileName}' успешно загружен и зеркалирован");
+                Console.WriteLine($"   Чек-сумма: {sourceChecksum}");
+                Console.WriteLine($"   Основной каталог: {sourceFilePath}");
+                Console.WriteLine($"   Зеркальный каталог: {mirrorFilePath}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при загрузке файла: {ex.Message}");
+            }
+        }
+
+        static async Task DownloadFile()
+        {
+            InitializeDirectories();
+
+            var files = GetAvailableFiles();
+            if (files.Length == 0)
+            {
+                Console.WriteLine("📁 Файлы не найдены");
                 return;
             }
 
-            Console.WriteLine($"Введенные данные: {string.Join(", ", data.Select(t => t.ToString("F1")))}");
-            AnalyzeTemperatureData(data, "Введенные данные");
-        }
-
-        static double[] ParseInputData(string input)
-        {
-            var separators = new char[] { ',', ' ', ';', '\t' };
-            var numbers = new List<double>();
-            
-            foreach (var part in input.Split(separators, StringSplitOptions.RemoveEmptyEntries))
+            Console.WriteLine("Доступные файлы:");
+            for (int i = 0; i < files.Length; i++)
             {
-                if (double.TryParse(part.Trim(), out double value))
+                Console.WriteLine($"{i + 1}. {files[i]}");
+            }
+
+            Console.Write("Выберите файл для выгрузки: ");
+            if (!int.TryParse(Console.ReadLine(), out int fileIndex) || fileIndex < 1 || fileIndex > files.Length)
+            {
+                Console.WriteLine("❌ Неверный выбор");
+                return;
+            }
+
+            string fileName = files[fileIndex - 1];
+            string sourceFilePath = Path.Combine(sourceDirectory, fileName);
+            string mirrorFilePath = Path.Combine(mirrorDirectory, fileName);
+
+            Console.Write("Введите путь для сохранения: ");
+            string destinationPath = Console.ReadLine();
+
+            try
+            {
+                // Проверяем чек-суммы
+                var (sourceValid, mirrorValid, sourceChecksum, mirrorChecksum) = await VerifyFileIntegrity(fileName);
+
+                Console.WriteLine($"🔍 Проверка целостности файла '{fileName}':");
+                Console.WriteLine($"   Основной файл: {(sourceValid ? "✅ Корректный" : "❌ Поврежден")}");
+                Console.WriteLine($"   Зеркальный файл: {(mirrorValid ? "✅ Корректный" : "❌ Поврежден")}");
+
+                string fileToCopy = sourceValid ? sourceFilePath : mirrorValid ? mirrorFilePath : null;
+
+                if (fileToCopy == null)
                 {
-                    numbers.Add(value);
+                    Console.WriteLine("❌ Оба файла повреждены! Выгрузка невозможна");
+                    return;
                 }
+
+                if (!sourceValid && mirrorValid)
+                {
+                    Console.WriteLine("⚠️  Восстанавливаем основной файл из зеркала...");
+                    File.Copy(mirrorFilePath, sourceFilePath, true);
+                    await File.WriteAllTextAsync(sourceFilePath + ".checksum", mirrorChecksum);
+                    Console.WriteLine("✅ Основной файл восстановлен");
+                }
+
+                File.Copy(fileToCopy, destinationPath, true);
+                Console.WriteLine($"✅ Файл успешно выгружен в: {destinationPath}");
             }
-            
-            return numbers.ToArray();
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Ошибка при выгрузке файла: {ex.Message}");
+            }
         }
 
-        static double[] GenerateSmoothTemperatureData()
+        static async Task VerifyFilesIntegrity()
         {
-            var random = new Random();
-            double baseTemp = 20.0;
-            var data = new List<double>();
+            InitializeDirectories();
 
-            for (int i = 0; i < 24; i++)
+            Console.WriteLine("🔍 Проверка целостности файлов...");
+
+            var files = GetAvailableFiles();
+            if (files.Length == 0)
             {
-                // Плавные изменения ±2°C
-                double variation = (random.NextDouble() - 0.5) * 4;
-                data.Add(baseTemp + variation);
-                baseTemp += (random.NextDouble() - 0.5) * 1; // Медленный дрейф
+                Console.WriteLine("📁 Файлы не найдены");
+                return;
             }
 
-            return data.ToArray();
-        }
+            int corruptedFiles = 0;
+            int healthyFiles = 0;
 
-        static double[] GenerateTemperatureDataWithAnomalies()
-        {
-            var random = new Random();
-            double baseTemp = 20.0;
-            var data = new List<double>();
-
-            for (int i = 0; i < 24; i++)
+            foreach (var fileName in files)
             {
-                double temp = baseTemp + (random.NextDouble() - 0.5) * 4;
+                var (sourceValid, mirrorValid, _, _) = await VerifyFileIntegrity(fileName);
                 
-                // Добавляем аномалии с вероятностью 20%
-                if (random.NextDouble() < 0.2)
+                if (sourceValid && mirrorValid)
                 {
-                    // Резкий перепад ±10-30°C
-                    temp += (random.NextDouble() - 0.5) * 40;
-                    Console.WriteLine($"Добавлена аномалия: {temp:F1}°C");
+                    Console.WriteLine($"✅ {fileName}: оба файла корректны");
+                    healthyFiles++;
                 }
-
-                data.Add(temp);
-                baseTemp += (random.NextDouble() - 0.5) * 1;
+                else if (!sourceValid && !mirrorValid)
+                {
+                    Console.WriteLine($"❌ {fileName}: оба файла повреждены");
+                    corruptedFiles++;
+                }
+                else if (!sourceValid)
+                {
+                    Console.WriteLine($"⚠️  {fileName}: основной файл поврежден, зеркало OK");
+                    corruptedFiles++;
+                }
+                else
+                {
+                    Console.WriteLine($"⚠️  {fileName}: зеркало повреждено, основной файл OK");
+                    corruptedFiles++;
+                }
             }
 
-            return data.ToArray();
+            Console.WriteLine($"\n📊 Итоги проверки:");
+            Console.WriteLine($"   Корректных файлов: {healthyFiles}");
+            Console.WriteLine($"   Проблемных файлов: {corruptedFiles}");
+            Console.WriteLine($"   Всего файлов: {files.Length}");
+
+            if (corruptedFiles > 0)
+            {
+                Console.WriteLine("\n💡 Рекомендация: выполните восстановление поврежденных файлов");
+            }
         }
 
-        static void AnalyzeTemperatureData(double[] data, string datasetName)
+        static void ShowFileList()
         {
-            if (data.Length == 0)
+            InitializeDirectories();
+
+            var files = GetAvailableFiles();
+            if (files.Length == 0)
             {
-                Console.WriteLine("Нет данных для анализа!");
+                Console.WriteLine("📁 Файлы не найдены");
                 return;
             }
 
-            // 5.2.2 Вычисление средних значений
-            double averageAll = data.Average();
-            double averageFiltered = CalculateFilteredAverage(data);
-            double difference = Math.Abs(averageAll - averageFiltered);
-
-            Console.WriteLine($"\n--- Анализ {datasetName} ---");
-            Console.WriteLine($"Количество измерений: {data.Length}");
-            Console.WriteLine($"Среднее значение (все данные): {averageAll:F2}°C");
-            Console.WriteLine($"Среднее значение (без выбросов): {averageFiltered:F2}°C");
-            Console.WriteLine($"Разница между средними: {difference:F2}°C");
-
-            // 5.2.3 Сравнение и вывод сообщений
-            if (difference > 2.0) // Порог для обнаружения аномалий
+            Console.WriteLine($"\n📋 Список файлов в хранилище ({files.Length} файлов):");
+            foreach (var file in files)
             {
-                int outlierCount = data.Length - data.Count(x => 
-                {
-                    var sorted = data.OrderBy(d => d).ToArray();
-                    double Q1 = sorted[data.Length / 4];
-                    double Q3 = sorted[data.Length * 3 / 4];
-                    double IQR = Q3 - Q1;
-                    return x >= Q1 - 1.5 * IQR && x <= Q3 + 1.5 * IQR;
-                });
-
-                Console.WriteLine("⚠️  ОБНАРУЖЕНЫ АНОМАЛИИ: Значения значительно отличаются!");
-                Console.WriteLine($"   Количество выбросов: {outlierCount}");
-                Console.WriteLine($"   Рекомендуется использовать фильтрованное среднее: {averageFiltered:F2}°C");
+                string filePath = Path.Combine(sourceDirectory, file);
+                FileInfo info = new FileInfo(filePath);
+                Console.WriteLine($"   📄 {file} ({info.Length} bytes)");
             }
-            else
-            {
-                Console.WriteLine("✅ Данные в норме, аномалий не обнаружено");
-                Console.WriteLine($"   Можно использовать общее среднее: {averageAll:F2}°C");
-            }
-
-            // Дополнительная статистика
-            Console.WriteLine($"\nДополнительная статистика:");
-            Console.WriteLine($"   Минимальная температура: {data.Min():F1}°C");
-            Console.WriteLine($"   Максимальная температура: {data.Max():F1}°C");
-            Console.WriteLine($"   Медиана: {CalculateMedian(data):F1}°C");
-            Console.WriteLine($"   Стандартное отклонение: {CalculateStandardDeviation(data):F2}°C");
         }
 
-        static double CalculateFilteredAverage(double[] data)
+        static string[] GetAvailableFiles()
         {
-            if (data.Length == 0) return 0;
-
-            // Используем межквартильный размах для фильтрации выбросов
-            var sorted = data.OrderBy(x => x).ToArray();
-            double Q1 = sorted[data.Length / 4];
-            double Q3 = sorted[data.Length * 3 / 4];
-            double IQR = Q3 - Q1;
-            double lowerBound = Q1 - 1.5 * IQR;
-            double upperBound = Q3 + 1.5 * IQR;
-
-            var filtered = data.Where(x => x >= lowerBound && x <= upperBound).ToArray();
-            return filtered.Length > 0 ? filtered.Average() : data.Average();
+            return Directory.GetFiles(sourceDirectory)
+                .Where(f => !f.EndsWith(".checksum"))
+                .Select(f => Path.GetFileName(f))
+                .ToArray();
         }
 
-        static double CalculateMedian(double[] data)
+        static async Task<(bool sourceValid, bool mirrorValid, string sourceChecksum, string mirrorChecksum)> 
+            VerifyFileIntegrity(string fileName)
         {
-            var sorted = data.OrderBy(x => x).ToArray();
-            int mid = sorted.Length / 2;
-            return sorted.Length % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+            string sourceFilePath = Path.Combine(sourceDirectory, fileName);
+            string mirrorFilePath = Path.Combine(mirrorDirectory, fileName);
+            string sourceChecksumFile = sourceFilePath + ".checksum";
+            string mirrorChecksumFile = mirrorFilePath + ".checksum";
+
+            if (!File.Exists(sourceFilePath) || !File.Exists(mirrorFilePath))
+                return (false, false, "", "");
+
+            string sourceChecksum = await CalculateChecksum(sourceFilePath);
+            string mirrorChecksum = await CalculateChecksum(mirrorFilePath);
+
+            string storedSourceChecksum = File.Exists(sourceChecksumFile) ? 
+                await File.ReadAllTextAsync(sourceChecksumFile) : "";
+            string storedMirrorChecksum = File.Exists(mirrorChecksumFile) ? 
+                await File.ReadAllTextAsync(mirrorChecksumFile) : "";
+
+            bool sourceValid = sourceChecksum == storedSourceChecksum;
+            bool mirrorValid = mirrorChecksum == storedMirrorChecksum;
+
+            return (sourceValid, mirrorValid, sourceChecksum, mirrorChecksum);
         }
 
-        static double CalculateStandardDeviation(double[] data)
+        static async Task<string> CalculateChecksum(string filePath)
         {
-            if (data.Length == 0) return 0;
-            double average = data.Average();
-            double sumOfSquares = data.Sum(x => Math.Pow(x - average, 2));
-            return Math.Sqrt(sumOfSquares / data.Length);
+            using var sha256 = SHA256.Create();
+            using var fileStream = File.OpenRead(filePath);
+            byte[] hashBytes = await sha256.ComputeHashAsync(fileStream);
+            return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
         }
     }
 }
