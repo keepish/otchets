@@ -1,10 +1,96 @@
-5.1 Реализовать временную избыточность для выполнения запроса к серверу в условиях ненадёжного сетевого соединения:
-При отправке запросов к серверу при неудачном ответе повторить запрос еще несколько раз.
-5.2 Реализовать программную избыточность для анализа аномалий в измерении температуры (см. п. 9);
-5.2.1 Сформировать два набора данных о температуре воздуха: один набор должен быть плавно усреднен без резких перепадов температуры, второй набор – содержит данные значительно отличающиеся от средних значений: резкие перепады, аномально высокие или низкие значения
-5.2.2 Вычислить среднее значение температуры с учетом и без учета выбросов
-5.2.3 Сравнить значения и вывести сообщение о наличии аномалий в данных, если значения значительно отличаются.
-5.3 Реализовать информационную избыточность методом зеркалирования данных и проверки чек-сумм; 
-5.3.1 Разработать приложение-хранилище файлов. Пользователь выбирает в приложении каталог и каталог – зеркало, после чего может загружать в приложение файлы. При загрузке файла в оба указанных каталога сохраняется выбранный файл и там же создаются файлы ИмяФайла.checksum, которые содержат чек-сумму файла (чек-сумму можно получить с использованием одного из стандартных алгоритмов хэширования).
-5.3.2 Реализовать возможность выгружать файлы из приложения, при этом перед выгрузкой сверять чек-сумму файла с учетом файла .checksum, и при несоответствии основного файла и соответствии зеркалированного возвращать корректный файл.
+using System;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Task1
+{
+    class Program
+    {
+        static async Task Main(string[] args)
+        {
+            Console.WriteLine("=== Временная избыточность - Повтор запросов ===");
+            
+            string url = "http://arcotel.ru";
+            Console.WriteLine($"URL: {url}");
+            Console.WriteLine($"Метод: GET");
+            Console.WriteLine(new string('-', 40));
+            
+            // Простые настройки
+            int maxAttempts = 3;
+            int delayMs = 1000;
+            
+            // Создаем HttpClient один раз
+            using (HttpClient client = new HttpClient())
+            {
+                // Настраиваем таймаут
+                client.Timeout = TimeSpan.FromSeconds(10);
+                
+                // Переменная для результата
+                string result = null;
+                bool success = false;
+                int attempt;
+                
+                // Простой цикл повторов
+                for (attempt = 1; attempt <= maxAttempts; attempt++)
+                {
+                    Console.WriteLine($"Попытка {attempt} из {maxAttempts}...");
+                    
+                    try
+                    {
+                        // Выполняем GET запрос
+                        HttpResponseMessage response = await client.GetAsync(url);
+                        
+                        if (response.IsSuccessStatusCode)
+                        {
+                            // Читаем результат
+                            result = await response.Content.ReadAsStringAsync();
+                            success = true;
+                            Console.WriteLine($"УСПЕХ! Статус код: {(int)response.StatusCode}");
+                            break; // Выходим из цикла при успехе
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Ошибка HTTP: {(int)response.StatusCode}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Ошибка: {ex.Message}");
+                    }
+                    
+                    // Если не последняя попытка - ждем
+                    if (attempt < maxAttempts)
+                    {
+                        Console.WriteLine($"Ждем {delayMs} мс...");
+                        Thread.Sleep(delayMs);
+                    }
+                }
+                
+                // Выводим итоговый результат
+                Console.WriteLine(new string('-', 40));
+                
+                if (success)
+                {
+                    Console.WriteLine($"Успешно выполнено за {attempt} попыток");
+                    Console.WriteLine($"Размер ответа: {result.Length} символов");
+                    
+                    if (result.Length > 0)
+                    {
+                        Console.WriteLine("Начало ответа:");
+                        int previewLength = Math.Min(200, result.Length);
+                        Console.WriteLine(result.Substring(0, previewLength));
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Все {maxAttempts} попыток завершились ошибкой");
+                }
+            }
+            
+            Console.WriteLine("\nНажмите Enter для выхода...");
+            Console.ReadLine();
+        }
+    }
+}
 
